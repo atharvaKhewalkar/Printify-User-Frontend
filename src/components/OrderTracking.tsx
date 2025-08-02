@@ -3,7 +3,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { OrderDetails } from './PrintOrderForm';
-import { CheckCircle, Clock, Printer, Package } from 'lucide-react';
+import { CheckCircle, Clock, Printer, Package, AlertCircle } from 'lucide-react';
+import { orderService, OrderStatusResponse } from '@/services/orderService';
+import { useToast } from '@/hooks/use-toast';
 
 interface OrderTrackingProps {
   orderDetails: OrderDetails;
@@ -21,58 +23,70 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
   onStartNewOrder
 }) => {
   const [status, setStatus] = useState<OrderStatus>('pending');
+  const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
 
-  // Simulate order progress
+  // Poll the backend for real order status
   useEffect(() => {
-    const progressSteps = ['pending', 'processing', 'printing', 'ready'] as OrderStatus[];
-    let currentStep = 0;
-
-    const interval = setInterval(() => {
-      if (currentStep < progressSteps.length - 1) {
-        currentStep++;
-        setStatus(progressSteps[currentStep]);
-      } else {
-        clearInterval(interval);
+    const fetchStatus = async () => {
+      try {
+        const response = await orderService.getOrderStatus(orderId);
+        if (response.status !== status) {
+            toast({ title: "Order Status Updated!", description: `Your order is now: ${response.status}` });
+        }
+        setStatus(response.status);
+        setError(null);
+      } catch (err) {
+        setError('Could not fetch order status.');
+        console.error(err);
       }
-    }, 3000); // Change status every 3 seconds for demo
+    };
+
+    fetchStatus(); // Fetch immediately on load
+    const interval = setInterval(fetchStatus, 5000); // Then poll every 5 seconds
+
+    // Stop polling if order is complete or component unmounts
+    if (status === 'completed' || status === 'ready') {
+      clearInterval(interval);
+    }
 
     return () => clearInterval(interval);
-  }, []);
+  }, [orderId, status, toast]);
 
   const getStatusInfo = (currentStatus: OrderStatus) => {
     switch (currentStatus) {
       case 'pending':
         return { 
           label: 'Order Received', 
-          color: 'bg-progress', 
+          color: 'bg-gray-500', 
           icon: Clock,
           description: 'Your order has been received and is being reviewed.'
         };
       case 'processing':
         return { 
           label: 'Processing', 
-          color: 'bg-progress', 
+          color: 'bg-blue-500', 
           icon: Package,
           description: 'Your files are being prepared for printing.'
         };
       case 'printing':
         return { 
           label: 'Printing', 
-          color: 'bg-progress', 
+          color: 'bg-orange-500', 
           icon: Printer,
           description: 'Your order is currently being printed.'
         };
       case 'ready':
         return { 
           label: 'Ready for Pickup', 
-          color: 'bg-success', 
+          color: 'bg-green-500', 
           icon: CheckCircle,
           description: 'Your order is ready! Please visit the shop to collect.'
         };
       case 'completed':
         return { 
           label: 'Completed', 
-          color: 'bg-success', 
+          color: 'bg-green-600', 
           icon: CheckCircle,
           description: 'Order completed successfully. Thank you!'
         };
@@ -98,7 +112,7 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
             <CheckCircle className="w-8 h-8 text-success-foreground" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Payment Successful!</h1>
+            <h1 className="text-2xl font-bold text-foreground">Payment Processed!</h1>
             <p className="text-muted-foreground">Your order has been confirmed</p>
           </div>
         </div>
@@ -121,6 +135,12 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
               <p className="text-sm text-muted-foreground">
                 {statusInfo.description}
               </p>
+              {error && (
+                <div className="flex items-center justify-center text-red-500 text-sm">
+                    <AlertCircle className="w-4 h-4 mr-2" />
+                    {error}
+                </div>
+              )}
             </div>
 
             <div className="bg-muted/30 p-4 rounded-lg space-y-2">
@@ -143,57 +163,11 @@ export const OrderTracking: React.FC<OrderTrackingProps> = ({
                 </span>
               </div>
             </div>
-
-            {/* Important Notice */}
-            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
-              <p className="text-sm font-medium text-primary">
-                ⚠️ Important: Keep this screen open to track your order status in real-time.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Progress Timeline */}
-        <Card className="shadow-lg border-0 bg-card/95 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle>Order Progress</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {(['pending', 'processing', 'printing', 'ready'] as OrderStatus[]).map((step, index) => {
-                const stepInfo = getStatusInfo(step);
-                const StepIcon = stepInfo.icon;
-                const isCompleted = ['pending', 'processing', 'printing', 'ready'].indexOf(status) >= index;
-                const isCurrent = status === step;
-
-                return (
-                  <div key={step} className="flex items-center space-x-3">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                      isCompleted ? 'bg-success' : 'bg-muted'
-                    }`}>
-                      <StepIcon className={`w-4 h-4 ${
-                        isCompleted ? 'text-success-foreground' : 'text-muted-foreground'
-                      }`} />
-                    </div>
-                    <div className="flex-1">
-                      <p className={`font-medium ${isCurrent ? 'text-primary' : 'text-foreground'}`}>
-                        {stepInfo.label}
-                      </p>
-                    </div>
-                    {isCurrent && (
-                      <Badge variant="outline" className="border-primary text-primary">
-                        Current
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
           </CardContent>
         </Card>
 
         {/* New Order Button */}
-        {status === 'ready' && (
+        {(status === 'ready' || status === 'completed') && (
           <Button onClick={onStartNewOrder} className="w-full" size="lg">
             Place New Order
           </Button>
