@@ -48,9 +48,9 @@ export const PrintOrderForm: React.FC<PrintOrderFormProps> = ({ onSubmit }) => {
         <div className="text-center space-y-2">
           <div className="flex items-center justify-center space-x-2">
             <Printer className="w-8 h-8 text-primary" />
-            <h1 className="text-2xl font-bold text-foreground">QuickPrint Shop</h1>
+            <h1 className="text-2xl font-bold text-foreground">Paradise Xerox</h1>
           </div>
-          <p className="text-muted-foreground">Submit your print order easily</p>
+          <p className="text-muted-foreground">Submit your print order</p>
         </div>
 
         {/* Order Form */}
